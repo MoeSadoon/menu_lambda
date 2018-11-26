@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "./node_modules/typescript/bin/tsc",
-    "build:lambda": "zip -rX ../mml.zip *"
+    "build:lambda": "zip -rX dist/mml.zip *"
   },
   "author": "",
   "license": "ISC",
@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "axios": "^0.18.0",
-    "cheerio": "^1.0.0-rc.2"
+    "cheerio": "^1.0.0-rc.2",
+    "dateformat": "^3.0.3"
   }
 }

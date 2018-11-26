@@ -1,43 +1,119 @@
 import { Handler, Context, Callback } from 'aws-lambda';
 const axios = require('axios');
+const dateFormat = require('dateformat');
 const cheerio = require('cheerio');
 
-const isHeaderType = (node: CheerioElement): boolean => node.tagName === 'h2';
 const isTextType = (node: CheerioElement): boolean => node.type === 'text';
+const currentDayName = dateFormat(new Date(), 'dddd').toLowerCase();
+const attachmentMap = {
+  global: {
+    color: "#00BFFF",
+    title: "Global Kitchen",
+    text: '',
+  },
+  classic: {
+    color: "#FF1493",
+    title: "Classic",
+    text: '',
+  },
+  herbivore: {
+    color: "#36a64f",
+    title: "Herbivore",
+    text: '',
+  },
+}
 
-const getText = (el: CheerioElement): Array<string> => {
+const setDays = () : void => {
+  ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach((day : string) => {
+    attachmentMap[day] = {
+      color: "#FF5733",
+      title: "Cafe",
+      text: '',
+    }
+  });
+}
+
+setDays();
+
+const attachmentKeys = Object.keys(attachmentMap).map(key => ({ key, validate: new RegExp(`^${key}`, 'i') }));
+
+/* Private Member(s) */
+
+const getFormattedDate = () : string => dateFormat(new Date(), 'dddd, mmmm dS yyyy');
+
+const getSectionMatch = (item : string) : any => {
+  const match = attachmentKeys.find((attachment : any) => attachment.validate.test(item));
+  return match ? match.key : null;
+}
+
+const getTextFromNode = (el: CheerioElement) : Array<string> => {
   const stuff = el.childNodes;
   let result = [];
-  stuff.forEach(function(node: CheerioElement) {
-    const isHeader = isHeaderType(node);
+  stuff.forEach(function (node) {
     const isText = isTextType(node);
-
     if (isText) {
-      result.push(node.nodeValue);
+        result.push(node.nodeValue);
     }
     if (node.childNodes) {
-      let d = getText(node);
-      if (isHeader) {
-        result.push('\n\n');
-        d = d.map(s => `*${s}*`);
-      }
-      result = result.concat(d);
+        let d = getTextFromNode(node);
+        result = result.concat(d);
     }
   });
   return result;
 };
 
+const getCafeText = (children) : Array<string> => {
+  let result = [];
+  for (let i = 0, j = children.length; i < j; i += 1) {
+    result = result.concat(getTextFromNode(children[i]));
+  }
+  return result;
+};
+
+const filterAttachmentFor = (target: Array<string>) => {
+  return target.reduce((o, item) => {
+    const sectionName = getSectionMatch(item);
+    if (sectionName) {
+      o.currentHeader = sectionName;
+      o.payload[sectionName] = attachmentMap[sectionName];
+    }
+    if (o.currentHeader && !sectionName) {
+      o.payload[o.currentHeader].text += `${item}\n`;
+    }
+    return o;
+  }, { currentHeader: '', payload: {} });
+}
+
+const formatMessageFromText = (menuArea, cafeArea) : object => {
+  const payload = {
+    text: `Menu for ${getFormattedDate()}`,
+    attachments: []
+  }
+  const mainMenuAttachments = filterAttachmentFor(menuArea);
+  const cafeAreaAttachments = filterAttachmentFor(cafeArea);
+  payload.attachments = Object.values(mainMenuAttachments.payload);
+  payload.attachments.push(cafeAreaAttachments.payload[currentDayName]);
+  
+  // format cafe
+  return payload;
+}
+
+/* Public Member(s) */
+
 const handler: Handler = async (event: any, context: Context, callback: Callback) => {
+  const SLACK_WEB_HOOK = process.env.SLACK_WEB_HOOK;
+  const CANTEEN_14_URL = process.env.CANTEEN_14_URL;
+  if (!SLACK_WEB_HOOK || !CANTEEN_14_URL)
+    throw new Error('Invalid arguments');
   try {
-    const response: any = await axios.get("https://5438cpa251hgt.co.uk");
+    const response: any = await axios.get(CANTEEN_14_URL);
     const $: CheerioSelector = cheerio.load(response.data);
-    const htmlArea: Cheerio = $('[data-url-id="canteen"] [data-type="page"] .col .html-block:nth-child(3) .sqs-block-content');
-    const html: Array<string> = getText(htmlArea[0]);
-    if (html.length === 0) throw new Error(`Failed to find todays menu`);
-    const text = ["Todays menu"].concat(html).join('\n');
-    await axios.post('https://hooks.slack.com/services/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', {
-      text,
-    })
+    const mainMenuEl: Cheerio = $('[data-url-id="canteen"] [data-type="page"] .col .html-block:nth-child(3) .sqs-block-content');
+    const textFromMainMenu: Array<string> = getTextFromNode(mainMenuEl[0]);
+    const cafeAreaEl = $('[data-url-id="deli"] .has-content .sqs-block-content:nth-child(1) > *');
+    const textFromCafe = getCafeText(cafeAreaEl);
+    const payload = formatMessageFromText(textFromMainMenu, textFromCafe);
+    await axios.post(SLACK_WEB_HOOK, payload);
   } catch(err) {
     console.log(err);
   }
