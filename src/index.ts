@@ -2,7 +2,8 @@ import { Handler, Context, Callback } from 'aws-lambda';
 const axios = require('axios');
 const dateFormat = require('dateformat');
 const cheerio = require('cheerio');
-
+const blackList = ['noscript', 'script'];
+const isBlacklisted = (node: CheerioElement): boolean => blackList.indexOf(node.name) >= 0;
 const isTextType = (node: CheerioElement): boolean => node.type === 'text';
 const currentDayName = dateFormat(new Date(), 'dddd').toLowerCase();
 const attachmentMap = {
@@ -50,13 +51,15 @@ const getTextFromNode = (el: CheerioElement) : Array<string> => {
   const stuff = el.childNodes;
   let result = [];
   stuff.forEach(function (node) {
-    const isText = isTextType(node);
-    if (isText) {
-        result.push(node.nodeValue);
-    }
-    if (node.childNodes) {
-        let d = getTextFromNode(node);
-        result = result.concat(d);
+    if (!isBlacklisted(node)) {
+      const isText = isTextType(node);
+      if (isText) {
+        result.push(node.nodeValue.replace(/^\s+/, ''));
+      }
+      if (node.childNodes) {
+          let d = getTextFromNode(node);
+          result = result.concat(d);
+      }
     }
   });
   return result;
