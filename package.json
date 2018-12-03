@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "./node_modules/typescript/bin/tsc",
-    "build:lambda": "zip -rX dist/mml.zip *"
+    "build:lambda": "zip -rX dist/mml.zip *",
+    "build:test": "npm run build && TEST_MODE=1 SLACK_WEB_HOOK='/' CANTEEN_14_URL='https://5438cpa251hgt.co.uk' node scripts/exec.js"
   },
   "author": "",
   "license": "ISC",

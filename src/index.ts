@@ -118,7 +118,11 @@ const handler: Handler = async (event: any, context: Context, callback: Callback
     const cafeAreaEl = $('[data-url-id="deli"] .has-content .sqs-block-content:nth-child(1) > *');
     const textFromCafe = getCafeText(cafeAreaEl);
     const payload = formatMessageFromText(textFromMainMenu, textFromCafe);
-    await axios.post(SLACK_WEB_HOOK, payload);
+    if (process.env.TEST_MODE) {
+      console.log(payload);
+    } else {
+      await axios.post(SLACK_WEB_HOOK, payload);
+    }
   } catch(err) {
     console.log(err);
   }
