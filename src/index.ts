@@ -3,42 +3,43 @@ const axios = require('axios');
 const dateFormat = require('dateformat');
 const cheerio = require('cheerio');
 const blackList = ['noscript', 'script'];
+const version = require('../package.json').version;
 const isBlacklisted = (node: CheerioElement): boolean => blackList.indexOf(node.name) >= 0;
 const isTextType = (node: CheerioElement): boolean => node.type === 'text';
 const currentDayName = dateFormat(new Date(), 'dddd').toLowerCase();
+const daysOfWeek = ['^monday', '^tuesday', '^wednesday', '^thursday', '^friday'];
+
 const attachmentMap = {
-  global: {
+  '^global kitchen$': {
     color: "#00BFFF",
     title: "Global Kitchen",
     text: '',
-  },
-  classic: {
+  },  
+  '^classic$': {
     color: "#FF1493",
     title: "Classic",
     text: '',
   },
-  herbivore: {
+  '^herbivore$': {
     color: "#36a64f",
     title: "Herbivore",
     text: '',
   },
-}
+};
 
-const setDays = () : void => {
-  ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach((day : string) => {
-    attachmentMap[day] = {
-      color: "#FF5733",
-      title: "Cafe",
-      text: '',
-    }
-  });
-}
+daysOfWeek.forEach((day : string) => {
+  attachmentMap[day] = {
+    color: "#FF5733",
+    title: "Cafe",
+    text: '',
+  }
+});
 
-setDays();
-
-const attachmentKeys = Object.keys(attachmentMap).map(key => ({ key, validate: new RegExp(`^${key}`, 'i') }));
+const attachmentKeys = Object.keys(attachmentMap).map(key => ({ key, validate: new RegExp(key, 'i') }));
 
 /* Private Member(s) */
+
+const getDayKey = () => daysOfWeek.find(day => new RegExp(day, 'i').test(currentDayName));
 
 const getFormattedDate = () : string => dateFormat(new Date(), 'dddd, mmmm dS yyyy');
 
@@ -90,12 +91,13 @@ const filterAttachmentFor = (target: Array<string>) => {
 const formatMessageFromText = (menuArea, cafeArea) : object => {
   const payload = {
     text: `Menu for ${getFormattedDate()}`,
-    attachments: []
+    attachments: [],
+    footer: `menu ${version}`
   }
   const mainMenuAttachments = filterAttachmentFor(menuArea);
   const cafeAreaAttachments = filterAttachmentFor(cafeArea);
   payload.attachments = Object.values(mainMenuAttachments.payload);
-  payload.attachments.push(cafeAreaAttachments.payload[currentDayName]);
+  payload.attachments.push(cafeAreaAttachments.payload[getDayKey()]);
   
   // format cafe
   return payload;
